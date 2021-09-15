@@ -200,6 +200,7 @@ from OCP.TopLoc import TopLoc_Location
 from OCP.GeomAbs import (
     GeomAbs_Shape,
     GeomAbs_C0,
+    GeomAbs_G1,
     GeomAbs_Intersection,
     GeomAbs_JoinType,
 )
@@ -2037,7 +2038,7 @@ class Face(Shape):
     @classmethod
     def makeNSidedSurface(
         cls: Type["Face"],
-        edges: Iterable[Edge],
+        edges: Union[Iterable[Edge], Sequence[Tuple[Edge, "Face"]]],
         points: Iterable[gp_Pnt],
         continuity: GeomAbs_Shape = GeomAbs_C0,
         degree: int = 3,
@@ -2056,7 +2057,7 @@ class Face(Shape):
         :param points
         :type points: list of gp_Pnt
         :param edges
-        :type edges: list of Edge
+        :type edges: list of Edges or list of Edges and adjacent Faces the surface should be tangential towards
         :param continuity=GeomAbs_C0
         :type continuity: OCC.Core.GeomAbs continuity condition
         :param Degree = 3 (OCCT default)
@@ -2093,8 +2094,17 @@ class Face(Shape):
             maxDeg,
             maxSegments,
         )
-        for edge in edges:
-            n_sided.Add(edge.wrapped, continuity)
+        for count, constrained_edge in enumerate(edges):
+            if isinstance(constrained_edge, Tuple) and len(constrained_edge) > 1\
+                    and isinstance(constrained_edge[0], Edge) and isinstance(constrained_edge[1], Face):
+                # for some reason the last edge-face constraint cannot be set to bound, otherwise we get
+                # OCP.StdFail.StdFail_NotDone: BRep_API: command not done
+                # The edge is treated as bound though and the face constraint is considered...
+                isBound = count < len(edges) - 1
+                # currently only G1 continuity works. If OCCT should later on support other values this could be exposed
+                n_sided.Add(constrained_edge[0].wrapped, constrained_edge[1].wrapped, GeomAbs_G1, isBound)
+            else:
+                n_sided.Add(constrained_edge.wrapped, continuity)
         for pt in points:
             n_sided.Add(pt)
         n_sided.Build()
@@ -2456,7 +2466,8 @@ class Solid(Shape, Mixin3D):
 
         :param surf_edges
         :type 1 surf_edges: list of [x,y,z] float ordered coordinates
-        :type 2 surf_edges: list of ordered or unordered CadQuery wires
+        :type 2 surf_edges: list of ordered or unordered CadQuery wires (TODO: currently a Workplane is expected, not a list of wires...)
+        :type 3 surf_edges: list of tuples of border edges and adjacent faces the resulting surface should be tangential towards
         :param surf_pts = [] (uses only edges if [])
         :type surf_pts: list of [x,y,z] float coordinates
         :param thickness = 0 (returns 2D surface if 0)
@@ -2488,21 +2499,27 @@ class Solid(Shape, Mixin3D):
 
         # EDGE CONSTRAINTS
         # If a list of wires is provided, make a closed wire
+        # TODO: This code actually expects a Workplane, not a list of wires
+        # It might be preferrable if the direct API would not depend on the fluent API?
         if not isinstance(surf_edges, list):
             surf_edges = [o.vals()[0] for o in surf_edges.all()]
             surf_edges = Wire.assembleEdges(surf_edges)
             w = surf_edges.wrapped
+            edges = [i for i in Shape(w).Edges()]
 
         # If a list of (x,y,z) points provided, build closed polygon
         if isinstance(surf_edges, list):
-            e_array = [Vector(*e) for e in surf_edges]
-            wire_builder = BRepBuilderAPI_MakePolygon()
-            for e in e_array:  # Create polygon from edges
-                wire_builder.Add(e.toPnt())
-            wire_builder.Close()
-            w = wire_builder.Wire()
-
-        edges = [i for i in Shape(w).Edges()]
+            if len(surf_edges) > 0 and isinstance(surf_edges[0], Tuple) and len(surf_edges[0]) > 0\
+                and isinstance(surf_edges[0][0], Edge):
+                edges = surf_edges
+            else:
+                e_array = [Vector(*e) for e in surf_edges]
+                wire_builder = BRepBuilderAPI_MakePolygon()
+                for e in e_array:  # Create polygon from edges
+                    wire_builder.Add(e.toPnt())
+                wire_builder.Close()
+                w = wire_builder.Wire()
+                edges = [i for i in Shape(w).Edges()]
 
         # MAKE SURFACE
         continuity = GeomAbs_C0  # Fixed, changing to anything else crashes.

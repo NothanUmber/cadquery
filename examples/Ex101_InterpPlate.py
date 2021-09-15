@@ -1,6 +1,9 @@
 from math import sin, cos, pi, sqrt
 import cadquery as cq
 
+def show_object(_):
+    pass
+
 # TEST_1
 # example from PythonOCC core_geometry_geomplate.py, use of thickness = 0 returns 2D surface.
 thickness = 0
@@ -173,3 +176,73 @@ plate_4 = cq.Workplane("XY").interpPlate(edge_wire, surface_points, thickness)
 print("plate_4.val().Volume() = ", plate_4.val().Volume())
 plate_4 = plate_4.translate((0, 5 * 12, 0))
 show_object(plate_4)
+
+# EXAMPLE 5
+# Create surface with smooth (tangential) transitions towards the adjacent faces
+thickness = 0.1
+
+o = 20 # outer side length
+i = 5 # inner side length
+h = 20 # height
+
+surface_1 = cq.Face.makeFromWires(cq.Wire.makePolygon([cq.Vector(-i,-i,h), cq.Vector(-i,i,h),
+                                                       cq.Vector(-o,i,0), cq.Vector(-o,-i,0)]))
+surface_2 = cq.Face.makeFromWires(cq.Wire.makePolygon([cq.Vector(-5, -5, h), cq.Vector(i,-i,h),
+                                                       cq.Vector(i,-o,0),cq.Vector(-i,-o,0)]))
+surface_3 = cq.Face.makeFromWires(cq.Wire.makePolygon([cq.Vector(5, -5, h), cq.Vector(i,i,h),
+                                                       cq.Vector(o,i,0),cq.Vector(o,-i,0)]))
+surface_4 = cq.Face.makeFromWires(cq.Wire.makePolygon([cq.Vector(5, 5, h), cq.Vector(-i,i,h),
+                                                       cq.Vector(-i,o,0),cq.Vector(i,o,0)]))
+
+connection_edge_surface_1 = cq.StringSyntaxSelector(">Z").filter(surface_1.Edges())[0]
+connection_edge_surface_2 = cq.StringSyntaxSelector(">Z").filter(surface_2.Edges())[0]
+connection_edge_surface_3 = cq.StringSyntaxSelector(">Z").filter(surface_3.Edges())[0]
+connection_edge_surface_4 = cq.StringSyntaxSelector(">Z").filter(surface_4.Edges())[0]
+
+edges_with_face_constraints = [
+    (connection_edge_surface_1, surface_1),
+    (connection_edge_surface_2, surface_2),
+    (connection_edge_surface_3, surface_3),
+    (connection_edge_surface_4, surface_4)
+]
+'''new_surface_nsided = cq.Face.makeNSidedSurface(
+    edges=edges_with_face_constraints, points = [],
+    maxSegments=120)'''
+new_surface_thickness_0 = cq.Workplane().interpPlate(surf_edges=edges_with_face_constraints, thickness=0.0, combine=False,
+                                         clean=False,
+                                         degree=3,
+                                         nbPtsOnCur=1,
+                                         nbIter=1,
+                                         anisotropy=False,
+                                         tol2d=0.00001,
+                                         tol3d=0.0001,
+                                         tolAng=0.01,
+                                         tolCurv=0.1,
+                                         maxDeg=4,
+                                         maxSegments=100
+                                         )
+
+plate_5 = cq.Workplane().add(surface_1).add(surface_2).add(surface_3).add(surface_4).add(new_surface_thickness_0)
+print("plate_5.val().Volume() = ", plate_5.val().Volume())
+
+show_object(plate_5)
+
+# With thickness <> 0 the BRepOffset_MakeOffset call seems to take... long (terminated the example after ~30 mins)
+new_surface_thickness_01 = cq.Workplane().interpPlate(surf_edges=edges_with_face_constraints, thickness=0.1, combine=False,
+                                                      clean=False,
+                                                      degree=3,
+                                                      nbPtsOnCur=1,
+                                                      nbIter=1,
+                                                      anisotropy=False,
+                                                      tol2d=0.00001,
+                                                      tol3d=0.0001,
+                                                      tolAng=0.01,
+                                                      tolCurv=0.1,
+                                                      maxDeg=4,
+                                                      maxSegments=100
+                                                      )
+
+plate_6 = cq.Workplane().add(surface_1).add(surface_2).add(surface_3).add(surface_4).add(new_surface_thickness_01)
+print("plate_6.val().Volume() = ", plate_5.val().Volume())
+
+show_object(plate_6)

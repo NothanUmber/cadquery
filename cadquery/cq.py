@@ -3572,7 +3572,7 @@ class Workplane(object):
 
     def interpPlate(
         self: T,
-        surf_edges: Union[Sequence[VectorLike], Sequence[Edge]],
+        surf_edges: Union[Sequence[VectorLike], Sequence[Edge], Sequence[Tuple[Edge, Face]]],
         surf_pts: Sequence[VectorLike] = [],
         thickness: float = 0,
         combine: bool = False,
@@ -3593,7 +3593,8 @@ class Workplane(object):
 
         :param surf_edges
         :type 1 surf_edges: list of [x,y,z] float ordered coordinates
-        :type 2 surf_edges: list of ordered or unordered CadQuery wires
+        :type 2 surf_edges: list of ordered or unordered CadQuery wires (TODO: currently a Workplane is expected, not a list of wires...)
+        :type 3 surf_edges: list of tuples of border edges and adjacent faces the resulting surface should be tangential towards
         :param surf_pts = [] (uses only edges if [])
         :type surf_pts: list of [x,y,z] float coordinates
         :param thickness = 0 (returns 2D surface if 0)
